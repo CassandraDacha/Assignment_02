@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="CSC2002S">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/SampleData.zip!/" />
+      <root url="jar://$PROJECT_DIR$/SkeletonCode.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
