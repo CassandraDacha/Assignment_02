@@ -1,28 +1,26 @@
-
-JC=/usr/bin/javac
-J=java
-JFLAG=-g
+JAVAC=/usr/bin/javac
 
 .SUFFIXES: .java .class
 
-.java.class:
-	$(JC) -d ./bin/ -cp ./bin $<
+SRCDIR=src
+BINDIR=bin
+DOC=./doc
 
+$(BINDIR)/%.class:$(SRCDIR)/%.java
+	$(JAVAC) -d $(BINDIR)/ -cp $(BINDIR) $<
 
-CLASSES=  ./src/Terrain.class ./src/Flow.class  ./src/Simulation.class ./src/Water.class
+CLASSES= Terrain.class FlowPanel.class Flow.class
+CLASSE= Terrain.class FlowPanel.java Flow.java 
+CLASS_FILES=$(CLASSES:%.class=$(BINDIR)/%.class)
+SOURCEFILES=$(CLASSE:%.java=$(SRCDIR)/%.java)
 
-classes: $(CLASSES: .java=.class)
-	
-	
-default: classes
-
-
+default:
+	javac -sourcepath src/ -cp bin/ -d bin/ -g src/*.java
+		
 clean:
-	rm bin/*.class 
-	
-docs:
-	javadoc -d ./doc/ -cp ./doc  ./src/Terrain.java ./src/Flow.java ./src/Simulation.java ./src/Water.java ./src/FlowPanel.java 
-	 
-	
-			
-	
+	rm $(BINDIR)/*.class
+run:
+	java -cp $(BINDIR) Flow "data/medsample_in.txt"
+
+doc:	$(CLASS_FILES)
+	javadoc  -d $(DOC) $(SOURCEFILES)
