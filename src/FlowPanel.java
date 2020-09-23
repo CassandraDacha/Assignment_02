@@ -1,43 +1,49 @@
+import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import javax.swing.JPanel;
-import java.util.concurrent.ForkJoinPool;
-
-/**
- * class responsible for refreshing the view and starting handling the moving water simulation
- */
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FlowPanel extends JPanel implements Runnable {
-	Terrain land;
-	int width;
-	int height;
-	boolean clicked = false;
-	static final ForkJoinPool fjpool = new ForkJoinPool();
+	static Terrain land;
+	public static Water water ;
+	public static AtomicBoolean isPaused;
+	public static AtomicBoolean end;
+	public static AtomicInteger years;
+	public static AtomicBoolean isReset;
+	Master thread_01, thread_02, thread_03, thread_04;
 
 
+	/**
+	 * FlowPanel constructor that takes in one argument
+	 *
+	 * @param terrain
+	 */
 	FlowPanel(Terrain terrain) {
-		land=terrain;
+		isPaused = new AtomicBoolean(true);
+		end = new AtomicBoolean(false);
+		isReset = new AtomicBoolean(false);
+		years = new AtomicInteger(0);
+		land = terrain;
+		water = new Water(land.dimx, land.dimy);
 		addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				int x=e.getX();
 				int y=e.getY();
-				clicked = true;
-				int from_r = Math.max(0, x-3);
-				int to_r = Math.min(x+4, width-1);
-				int from_c = Math.max(0, y-3);
-				int to_c = Math.min(y+3, height-1);
-				BufferedImage img = land.getTransparentImage();
-
+				int from_r = Math.max(0, x-4);
+				int to_r = Math.min(x+4, land.dimy-1);
+				int from_c = Math.max(0, y-4);
+				int to_c = Math.min(y+4, land.dimx-1);
 				for(int i=from_r; i<to_r ;i++){
-					for(int j=from_c ; j<to_c; j++){
-						img.setRGB(i,j,Color.blue.getRGB());
-						repaint(i,j,width,height);
+					for(int j=from_c ; j<to_c; j++){ ;
+						water.setDepth(i,j,3);
+						paintWater(i,j);
 					}
 				}
-				System.out.println("Clicked Frame");
+				repaint();
 			}
 			@Override
 			public void mouseReleased(MouseEvent e) {
@@ -45,54 +51,108 @@ public class FlowPanel extends JPanel implements Runnable {
 		});
 	}
 
+    /**
+     * Paints water on the given x,y cordinate
+	 *
+	 * @param x
+     * @param y
+	 */
+	public static void paintWater(int x, int y){
+		BufferedImage img = land.getImage2();
+		if(water.getDepth(x,y) > 0){
+			img.setRGB(x, y, Color.blue.getRGB());
+		}
+		else{
+			Color c = new Color(0, 0, 0, 0);
+			img.setRGB(x, y, c.getRGB());
+		}
+	}
 
+	/**
+	 * draw the landscape in greyscale as an image
+	 * @param g
+	 */
 	@Override
 	protected void paintComponent(Graphics g) {
-		width = getWidth();
-		height = getHeight();
+
 		super.paintComponent(g);
-		// draw the landscape in greyscale as an image
 		if (land.getImage() != null){
 			g.drawImage(land.getImage(), 0, 0, null);
-			g.drawImage(land.getTransparentImage(), 0, 0, null);
 		}
+		if(land.getImage2() != null){
+			g.drawImage(land.getImage2(), 0, 0, null);
+		}
+	}
 
+	/**
+	 * Clears all the water from the model does isResetting the landscape
+	 * when the paintWater method is called
+	 */
+	public static void reset() {
+		isReset.set(true);
+		isPaused.set(true);
+		years.set(0);
+		int dimx = land.dimx;
+		int dimy = land.dimy;
+		for(int x=0; x < dimx; x++) {
+			for (int y = 0; y < dimy; y++) {
+				water.clearWater(x,y);
+				paintWater(x,y);
+			}
+		}
+	}
+
+	/**
+	 * pauses the simulation
+	 */
+	public static void pause() {
+		isPaused.set(true);
+	}
+
+	/**
+	 * starts the simulation
+	 */
+	public static void play() {
+		isPaused.set(false);
+		isReset.set(false);
+	}
+
+	/**
+	 * Ends the simulation and exits the program
+	 */
+	public static void endMaster() {
+		isPaused.set(true);
+		System.exit(1);
 	}
 
 	public void run() {
-		try {
-			while (true) {
-				if (!Master.paused.get()) {
-					Master master, master2, master3, master4;
-					Thread thread, thread2, thread3, thread4;
-					int dim = land.dim();
-					int low_1 = 0, low_2 = dim / 4, low_3 = dim / 2, low_4 = dim / 2 + dim / 4;
-					int high_1 = dim / 4, high_2 = dim / 2, high_3 = dim / 2 + dim / 4, high_4 = dim;
-					master = new Master(land, low_1, high_1);
-					master2 = new Master(land, low_2, high_2);
-					master3 = new Master(land, low_3, high_3);
-					master4 = new Master(land, low_4, high_4);
-					thread = new Thread(master);
-					thread2 = new Thread(master2);
-					thread3 = new Thread(master3);
-					thread4 = new Thread(master4);
-					thread.start();
-					thread2.start();
-					thread3.start();
-					thread4.start();
-					thread.join();
-					thread2.join();
-					thread3.join();
-					thread4.join();
-					Flow.generations.getAndIncrement();
-					Flow.incrementYear(Flow.generations);
-					repaint();
-				}
+		// display loop here
+		// to do: this should be controlled by the GUI
+		// to allow stopping and starting
+		int dim = land.dim();
+		while(!end.get()){
+			if(!isPaused.get()){
+				//At the start water must be cleared at the boundaries as indicated
+				water.clearWater(0,0);
+				paintWater(0,0);
+				water.clearWater(land.dimx-1,land.dimy-1);
+				paintWater(land.dimx-1,land.dimy-1);
+
+				thread_01 = new Master(land, water, 0,dim / 4);
+				thread_02 = new Master(land, water, dim / 4, dim / 2);
+				thread_03 = new Master(land, water, dim/2, dim / 2 + dim / 4);
+				thread_04 = new Master(land, water, dim / 2 + dim / 4, dim);
+
+				thread_01.start();
+				thread_02.start();
+				thread_03.start();
+				thread_04.start();
+
+				years.getAndIncrement();
+				Flow.increment(years);
+				repaint();
 			}
-		}catch(InterruptedException e){
-			System.out.print("Error");
+			repaint();
 		}
-
-
 	}
 }
